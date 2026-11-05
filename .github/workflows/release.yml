@@ -1,0 +1,231 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*.*.*']
+  # Select a tag ref when dispatching manually; verify-version rejects branches
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  # Keep in sync with docker/Dockerfile (NDK build arg)
+  NDK_VERSION: 29.0.14206865
+  LINUX_DEPS: >-
+    libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev
+    libssl-dev libayatana-appindicator3-dev librsvg2-dev
+
+jobs:
+  verify-version:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: v
+        run: |
+          conf_version="$(jq -r .version src-tauri/tauri.conf.json)"
+          tag_version="${GITHUB_REF_NAME#v}"
+          if [ "$conf_version" != "$tag_version" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match tauri.conf.json version $conf_version"
+            exit 1
+          fi
+          echo "version=$conf_version" >> "$GITHUB_OUTPUT"
+
+  desktop:
+    needs: verify-version
+    permissions:
+      contents: write # create/update the draft release
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            args: --bundles deb,appimage,rpm
+            rust_targets: ''
+          - os: windows-latest
+            args: --bundles msi,nsis
+            rust_targets: ''
+          - os: macos-latest
+            args: --target aarch64-apple-darwin
+            rust_targets: aarch64-apple-darwin
+          - os: macos-latest
+            args: --target x86_64-apple-darwin
+            rust_targets: x86_64-apple-darwin
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust_targets }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: ${{ matrix.args }}
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          # shellcheck disable=SC2086
+          sudo apt-get install -y $LINUX_DEPS
+      - run: npm ci
+      - uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Optional signing; empty values just produce unsigned bundles
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: 'Tauri Todo v__VERSION__'
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.args }}
+
+  android:
+    needs: [verify-version, desktop]
+    permissions:
+      contents: write # upload assets to the draft release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      GH_TOKEN: ${{ github.token }}
+      KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: android-actions/setup-android@v4
+      - name: Install NDK and platform
+        run: |
+          sdkmanager "platforms;android-36" "ndk;${NDK_VERSION}"
+          echo "NDK_HOME=${ANDROID_HOME}/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          # shellcheck disable=SC2086
+          sudo apt-get install -y $LINUX_DEPS
+      - name: Write signing config
+        if: env.KEYSTORE_B64 != ''
+        # Needs a matching signingConfigs block in src-tauri/gen/android/app/build.gradle.kts:
+        #   val props = java.util.Properties().apply {
+        #     val f = rootProject.file("keystore.properties")
+        #     if (f.exists()) f.inputStream().use { load(it) }
+        #   }
+        #   signingConfigs { create("release") {
+        #     storeFile = file(props.getProperty("storeFile") ?: "release.jks")
+        #     storePassword = props.getProperty("storePassword")
+        #     keyAlias = props.getProperty("keyAlias")
+        #     keyPassword = props.getProperty("keyPassword") } }
+        #   buildTypes { getByName("release") { signingConfig = signingConfigs.getByName("release") } }
+        run: |
+          keystore="$RUNNER_TEMP/release.jks"
+          echo "$KEYSTORE_B64" | base64 -d > "$keystore"
+          {
+            echo "storeFile=$keystore"
+            echo "storePassword=$KEYSTORE_PASSWORD"
+            echo "keyAlias=$KEY_ALIAS"
+            echo "keyPassword=$KEY_PASSWORD"
+          } > src-tauri/gen/android/keystore.properties
+      - run: npm ci
+      - run: npm run tauri android build -- --apk --aab
+      - name: Upload to release
+        run: |
+          mapfile -t files < <(find src-tauri/gen/android/app/build/outputs \( -name '*.apk' -o -name '*.aab' \))
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "::error::No APK/AAB produced"
+            exit 1
+          fi
+          gh release upload "$GITHUB_REF_NAME" "${files[@]}" --clobber
+
+  # iOS is opt-in: set repo variable ENABLE_IOS=true.
+  # Required secrets:
+  #   APPLE_DEVELOPMENT_TEAM      team ID
+  #   IOS_CERTIFICATE             base64 .p12 (distribution certificate)
+  #   IOS_CERTIFICATE_PASSWORD    .p12 password
+  #   IOS_MOBILE_PROVISION        base64 .mobileprovision (App Store profile)
+  #   APPLE_API_ISSUER            App Store Connect API issuer ID
+  #   APPLE_API_KEY               App Store Connect API key ID
+  #   APPLE_API_KEY_CONTENT       contents of the AuthKey_*.p8 file
+  ios:
+    if: vars.ENABLE_IOS == 'true'
+    needs: [verify-version]
+    runs-on: macos-latest
+    timeout-minutes: 90
+    env:
+      APPLE_DEVELOPMENT_TEAM: ${{ secrets.APPLE_DEVELOPMENT_TEAM }}
+      APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+      APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+      IOS_CERTIFICATE: ${{ secrets.IOS_CERTIFICATE }}
+      IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
+      IOS_MOBILE_PROVISION: ${{ secrets.IOS_MOBILE_PROVISION }}
+      APPLE_API_KEY_CONTENT: ${{ secrets.APPLE_API_KEY_CONTENT }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - name: Import signing assets
+        run: |
+          keychain="$RUNNER_TEMP/build.keychain"
+          cert="$RUNNER_TEMP/cert.p12"
+          echo "$IOS_CERTIFICATE" | base64 -d > "$cert"
+          security create-keychain -p "" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "" "$keychain"
+          security import "$cert" -P "$IOS_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$keychain"
+          security set-key-partition-list -S apple-tool:,apple: -k "" "$keychain"
+          security list-keychains -d user -s "$keychain" login.keychain
+          profiles="$HOME/Library/MobileDevice/Provisioning Profiles"
+          mkdir -p "$profiles"
+          echo "$IOS_MOBILE_PROVISION" | base64 -d > "$profiles/build.mobileprovision"
+          mkdir -p "$HOME/.private_keys"
+          echo "$APPLE_API_KEY_CONTENT" > "$HOME/.private_keys/AuthKey_${APPLE_API_KEY}.p8"
+      - run: npm ci
+      # The Xcode project is not committed; generate it on the runner
+      - run: npm run tauri ios init
+      - run: npm run tauri ios build -- --export-method app-store-connect
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ios-ipa
+          path: src-tauri/gen/apple/build/arm64/*.ipa
+          if-no-files-found: error

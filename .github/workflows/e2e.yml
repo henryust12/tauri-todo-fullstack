@@ -1,0 +1,109 @@
+name: E2E
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  LINUX_DEPS: >-
+    libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev
+    libssl-dev libayatana-appindicator3-dev librsvg2-dev xvfb webkit2gtk-driver
+
+jobs:
+  playwright:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            pw_install: npx playwright install --with-deps
+            pw_args: ''
+          - os: macos-latest
+            pw_install: npx playwright install
+            pw_args: ''
+          - os: windows-latest
+            pw_install: npx playwright install
+            # Narrow here if a project is flaky on a platform, e.g.
+            # "--project=chromium --project=mobile --project=tablet"
+            pw_args: ''
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    env:
+      PW_ARGS: ${{ matrix.pw_args }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+      - run: npm ci
+      - name: Install Playwright browsers
+        shell: bash
+        run: ${{ matrix.pw_install }}
+      - name: Run Playwright
+        shell: bash
+        run: |
+          read -r -a args <<< "$PW_ARGS"
+          npm run test:e2e -- "${args[@]}"
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: playwright-report-${{ matrix.os }}
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  webdriver:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - name: Detect native E2E suite
+        id: detect
+        run: |
+          if [ -d e2e-native ] && [ -n "$(ls -A e2e-native)" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "No e2e-native/ suite yet; skipping."
+          fi
+      - uses: actions/setup-node@v7
+        if: steps.detect.outputs.present == 'true'
+        with:
+          node-version: 26
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+        if: steps.detect.outputs.present == 'true'
+      - uses: Swatinem/rust-cache@v2
+        if: steps.detect.outputs.present == 'true'
+        with:
+          workspaces: src-tauri
+      - name: Install Linux dependencies
+        if: steps.detect.outputs.present == 'true'
+        run: |
+          sudo apt-get update
+          # shellcheck disable=SC2086
+          sudo apt-get install -y $LINUX_DEPS
+      - name: Build app and install tauri-driver
+        if: steps.detect.outputs.present == 'true'
+        run: |
+          npm ci
+          npm run tauri build -- --debug --no-bundle
+          cargo install tauri-driver --locked
+      # Assumes e2e-native/package.json defines `test` and starts/targets tauri-driver itself
+      - name: Run native E2E under Xvfb
+        if: steps.detect.outputs.present == 'true'
+        working-directory: e2e-native
+        run: |
+          npm ci
+          xvfb-run -a npm test
