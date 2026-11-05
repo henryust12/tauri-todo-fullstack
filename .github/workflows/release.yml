@@ -42,8 +42,30 @@ jobs:
           fi
           echo "version=$conf_version" >> "$GITHUB_OUTPUT"
 
-  desktop:
+  # One job owns the draft release, so the build jobs only upload to it and do
+  # not wait on each other (a missing macOS runner must not block Fedora/Android).
+  draft-release:
     needs: verify-version
+    permissions:
+      contents: write # create the draft release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERSION: ${{ needs.verify-version.outputs.version }}
+    steps:
+      - name: Create the draft release unless it exists
+        run: |
+          if gh release list --repo "$GITHUB_REPOSITORY" --limit 100 --json tagName \
+            --jq '.[].tagName' | grep -qx "$GITHUB_REF_NAME"; then
+            echo "Release $GITHUB_REF_NAME already exists"
+          else
+            gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft \
+              --verify-tag --title "Tauri Todo v$VERSION" --notes ""
+          fi
+
+  desktop:
+    needs: [verify-version, draft-release]
     permissions:
       contents: write # create/update the draft release
     strategy:
@@ -76,7 +98,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
-          key: ${{ matrix.args }}
+          key: ${{ matrix.os }}-${{ matrix.rust_targets }}
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
         run: |
@@ -121,7 +143,7 @@ jobs:
           args: ${{ matrix.args }}
 
   android:
-    needs: [verify-version, desktop]
+    needs: [verify-version, draft-release]
     permissions:
       contents: write # upload assets to the draft release
     runs-on: ubuntu-24.04
@@ -186,7 +208,7 @@ jobs:
   # Fedora-native rpm, built against Fedora 43 libraries. The Ubuntu job's
   # generic rpm stays for other rpm distros (it needs an older glibc).
   fedora:
-    needs: [verify-version, desktop]
+    needs: [verify-version, draft-release]
     permissions:
       contents: write # upload assets to the draft release
     runs-on: ubuntu-24.04
