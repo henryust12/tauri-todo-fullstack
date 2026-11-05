@@ -1,0 +1,11 @@
+node_modules/
+.svelte-kit/
+build/
+dist/
+src-tauri/target/
+.env
+*.log
+.DS_Store
+test-results/
+playwright-report/
+coverage/
