@@ -52,8 +52,10 @@ jobs:
       - run: npm ci --ignore-scripts
       - run: npm audit --audit-level=high
 
+  # Needs GitHub Advanced Security on private repos; cargo-audit, cargo-deny
+  # and npm-audit above cover dependencies while this repo is private.
   dependency-review:
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && !github.event.repository.private
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
