@@ -1,6 +1,6 @@
 [package]
 name = "tauri-todo"
-version = "0.1.0"
+version = "0.1.1"
 description = "Tauri Todo"
 authors = ["henryust12"]
 edition = "2024"
