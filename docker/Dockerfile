@@ -3,6 +3,9 @@
 # base: Rust + Node + Tauri v2 Linux build deps + headless test tooling
 FROM rust:1.99-trixie AS base
 
+# Fail a RUN when any command in a pipe fails (checksum checks rely on it).
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
 ARG DEBIAN_FRONTEND=noninteractive
 ARG TARGETARCH
 ARG NODE_VERSION=26.13.0
@@ -60,12 +63,11 @@ RUN case "${TARGETARCH:-amd64}" in \
         *) echo "unsupported arch: ${TARGETARCH}" >&2; exit 1 ;; \
     esac \
     && file="node-v${NODE_VERSION}-linux-${node_arch}.tar.xz" \
-    && cd /tmp \
-    && curl -fsSLO "https://nodejs.org/dist/v${NODE_VERSION}/${file}" \
-    && curl -fsSLO "https://nodejs.org/dist/v${NODE_VERSION}/SHASUMS256.txt" \
-    && grep " ${file}\$" SHASUMS256.txt | sha256sum -c - \
-    && tar -xJf "${file}" -C /usr/local --strip-components=1 --no-same-owner \
-    && rm -f "${file}" SHASUMS256.txt
+    && curl -fsSLo "/tmp/${file}" "https://nodejs.org/dist/v${NODE_VERSION}/${file}" \
+    && curl -fsSLo /tmp/SHASUMS256.txt "https://nodejs.org/dist/v${NODE_VERSION}/SHASUMS256.txt" \
+    && echo "$(grep " ${file}\$" /tmp/SHASUMS256.txt | cut -d' ' -f1)  /tmp/${file}" | sha256sum -c - \
+    && tar -xJf "/tmp/${file}" -C /usr/local --strip-components=1 --no-same-owner \
+    && rm -f "/tmp/${file}" /tmp/SHASUMS256.txt
 
 RUN rustup component add rustfmt clippy
 
@@ -85,15 +87,27 @@ ENV WEBKIT_DISABLE_DMABUF_RENDERER=1 \
 
 WORKDIR /workspace
 USER dev
+
+# Native E2E driver; pairs with webkit2gtk-driver installed above.
+RUN cargo install tauri-driver --locked
+
 CMD ["bash"]
 
 # android: base + JDK 21, Android SDK/NDK, Rust Android targets
 FROM base AS android
 
+# Inherited from base already; restated so linters see it in this stage.
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
 ARG CMDLINE_TOOLS_BUILD=15859902
 ARG CMDLINE_TOOLS_SHA256=4e4c464f145a7512b57d088ac6c278c03c9eea610886b35a5e0804e74eedf583
-ARG PLATFORM_VERSION=36
-ARG BUILD_TOOLS_VERSION=36.1.0
+# Match compileSdk/targetSdk in src-tauri/gen/android/app/build.gradle.kts.
+ARG PLATFORM_VERSION=37.0
+ARG BUILD_TOOLS_VERSION=37.0.0
+# The tauri and plugin Android libraries compile against SDK 36 with AGP's
+# default build-tools; preinstall them so Gradle does not fetch them per build.
+ARG LIB_PLATFORM_VERSION=36
+ARG LIB_BUILD_TOOLS_VERSION=36.0.0
 ARG NDK_VERSION=29.0.14206865
 # ARGs do not carry over between stages; redeclare for the SDK chown below.
 ARG USER_UID=1000
@@ -115,17 +129,18 @@ ENV JAVA_HOME=/usr/lib/jvm/java-21-openjdk \
 ENV PATH=${PATH}:/opt/android-sdk/cmdline-tools/latest/bin:/opt/android-sdk/platform-tools
 
 RUN mkdir -p "${ANDROID_HOME}/cmdline-tools" \
-    && cd /tmp \
-    && curl -fsSLo cmdline-tools.zip "https://dl.google.com/android/repository/commandlinetools-linux-${CMDLINE_TOOLS_BUILD}_latest.zip" \
-    && echo "${CMDLINE_TOOLS_SHA256}  cmdline-tools.zip" | sha256sum -c - \
-    && unzip -q cmdline-tools.zip -d "${ANDROID_HOME}/cmdline-tools" \
+    && curl -fsSLo /tmp/cmdline-tools.zip "https://dl.google.com/android/repository/commandlinetools-linux-${CMDLINE_TOOLS_BUILD}_latest.zip" \
+    && echo "${CMDLINE_TOOLS_SHA256}  /tmp/cmdline-tools.zip" | sha256sum -c - \
+    && unzip -q /tmp/cmdline-tools.zip -d "${ANDROID_HOME}/cmdline-tools" \
     && mv "${ANDROID_HOME}/cmdline-tools/cmdline-tools" "${ANDROID_HOME}/cmdline-tools/latest" \
-    && rm cmdline-tools.zip \
+    && rm /tmp/cmdline-tools.zip \
     && (yes || true) | sdkmanager --licenses >/dev/null \
     && sdkmanager \
         "platform-tools" \
         "platforms;android-${PLATFORM_VERSION}" \
         "build-tools;${BUILD_TOOLS_VERSION}" \
+        "platforms;android-${LIB_PLATFORM_VERSION}" \
+        "build-tools;${LIB_BUILD_TOOLS_VERSION}" \
         "ndk;${NDK_VERSION}" \
     && chown -R "${USER_UID}:${USER_GID}" "${ANDROID_HOME}"
 
