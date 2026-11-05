@@ -13,7 +13,8 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
-  # Keep in sync with docker/Dockerfile (NDK build arg)
+  # Keep NDK_VERSION and the platform/build-tools below (android jobs) in sync with
+  # docker/Dockerfile (NDK_VERSION, PLATFORM_VERSION, BUILD_TOOLS_VERSION)
   NDK_VERSION: 29.0.14206865
   LINUX_DEPS: >-
     libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev
@@ -94,7 +95,9 @@ jobs:
       - uses: android-actions/setup-android@v4
       - name: Install NDK and platform
         run: |
-          sdkmanager "platforms;android-36" "ndk;${NDK_VERSION}"
+          # 36: tauri's Android library modules compile against platform 36
+          sdkmanager "platforms;android-37.0" "build-tools;37.0.0" \
+            "platforms;android-36" "build-tools;36.0.0" "ndk;${NDK_VERSION}"
           echo "NDK_HOME=${ANDROID_HOME}/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
       - uses: dtolnay/rust-toolchain@stable
         with:

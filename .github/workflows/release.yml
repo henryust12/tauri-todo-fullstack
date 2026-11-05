@@ -14,7 +14,8 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  # Keep in sync with docker/Dockerfile (NDK build arg)
+  # Keep NDK_VERSION and the platform/build-tools below (android jobs) in sync with
+  # docker/Dockerfile (NDK_VERSION, PLATFORM_VERSION, BUILD_TOOLS_VERSION)
   NDK_VERSION: 29.0.14206865
   LINUX_DEPS: >-
     libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev
@@ -124,7 +125,9 @@ jobs:
       - uses: android-actions/setup-android@v4
       - name: Install NDK and platform
         run: |
-          sdkmanager "platforms;android-36" "ndk;${NDK_VERSION}"
+          # 36: tauri's Android library modules compile against platform 36
+          sdkmanager "platforms;android-37.0" "build-tools;37.0.0" \
+            "platforms;android-36" "build-tools;36.0.0" "ndk;${NDK_VERSION}"
           echo "NDK_HOME=${ANDROID_HOME}/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -139,17 +142,7 @@ jobs:
           sudo apt-get install -y $LINUX_DEPS
       - name: Write signing config
         if: env.KEYSTORE_B64 != ''
-        # Needs a matching signingConfigs block in src-tauri/gen/android/app/build.gradle.kts:
-        #   val props = java.util.Properties().apply {
-        #     val f = rootProject.file("keystore.properties")
-        #     if (f.exists()) f.inputStream().use { load(it) }
-        #   }
-        #   signingConfigs { create("release") {
-        #     storeFile = file(props.getProperty("storeFile") ?: "release.jks")
-        #     storePassword = props.getProperty("storePassword")
-        #     keyAlias = props.getProperty("keyAlias")
-        #     keyPassword = props.getProperty("keyPassword") } }
-        #   buildTypes { getByName("release") { signingConfig = signingConfigs.getByName("release") } }
+        # Consumed by src-tauri/gen/android/app/build.gradle.kts
         run: |
           keystore="$RUNNER_TEMP/release.jks"
           echo "$KEYSTORE_B64" | base64 -d > "$keystore"

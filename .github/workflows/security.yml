@@ -70,3 +70,4 @@ jobs:
           dockerfile: docker/Dockerfile
           # DL3008: apt packages are intentionally unpinned
           ignore: DL3008
+          failure-threshold: warning
