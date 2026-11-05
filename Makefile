@@ -4,7 +4,7 @@ DEV     := $(DC) run --rm dev
 ANDROID := $(DC) run --rm android
 
 .DEFAULT_GOAL := help
-.PHONY: help image image-android shell android-shell dev android-dev build android-build test x11 doctor
+.PHONY: help image image-android shell android-shell install dev android-dev build android-build lint test e2e x11 doctor
 
 help: ## Show targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-14s %s\n", $$1, $$2}'
@@ -33,8 +33,17 @@ build: ## Build the Linux bundles
 android-build: ## Build the Android apk/aab
 	$(ANDROID) npm run tauri android build
 
-test: ## Run Rust and JS tests (placeholder until scaffolded)
-	$(DEV) bash -c 'cargo test --manifest-path src-tauri/Cargo.toml && npm test'
+install: ## Install JS dependencies (npm ci)
+	$(DEV) npm ci
+
+lint: ## Run eslint, prettier, svelte-check, rustfmt and clippy
+	$(DEV) bash -c 'npm run lint && npm run check && cargo fmt --manifest-path src-tauri/Cargo.toml --check && cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings'
+
+test: ## Run JS and Rust tests
+	$(DEV) bash -c 'npm test && cargo test --manifest-path src-tauri/Cargo.toml'
+
+e2e: ## Run Playwright E2E tests
+	$(DEV) npm run test:e2e
 
 x11: ## Allow the local user to use the host X server (once per session)
 	xhost +SI:localuser:$$(id -un)
