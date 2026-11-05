@@ -43,15 +43,17 @@ the end-to-end suites, `docker/` and `compose.yaml` the dev environment.
 
 GitHub Actions runs on every push and pull request:
 
-- `ci.yml`: lint, debug builds on Linux, Windows and macOS, Android debug APK, iOS simulator
-  build, Docker images.
+- `ci.yml`: lint, debug builds on Linux, Windows and macOS, a Fedora 43 rpm installed with
+  `dnf`, Android debug APK, iOS simulator build, Docker images.
 - `test.yml`: Rust tests on three OSes and Vitest.
 - `e2e.yml`: Playwright on three OSes and the native WebDriver suite on Linux.
 - `security.yml`: cargo-audit, cargo-deny, npm audit, dependency review, hadolint (also weekly).
 
 Pushing a tag such as `v0.1.0` runs `release.yml`. The tag must match `version` in
 `src-tauri/tauri.conf.json`. It creates a draft GitHub release with .deb, .rpm, AppImage,
-.msi, NSIS .exe, .dmg/.app (Apple Silicon and Intel), plus Android .apk and .aab.
+.msi, NSIS .exe, .dmg/.app (Apple Silicon and Intel), plus Android .apk and .aab. The
+Fedora rpm (`*.fc43.x86_64.rpm`) is built in a Fedora 43 container and install-tested with
+`dnf`; the plain .rpm is the generic build for other rpm distros.
 
 ```sh
 git tag -s v0.1.0 -m "v0.1.0" && git push origin v0.1.0
