@@ -4,11 +4,11 @@ Guidance for coding agents working in this repository.
 
 ## Status
 
-Tauri 2 desktop and mobile todo app: SvelteKit (Svelte 5, TypeScript, adapter-static, `ssr = false`) frontend in `src/`, Rust core in `src-tauri/`. Tooling: ESLint + Prettier + svelte-check, Vitest (`src/**/*.test.ts`), Playwright (`e2e/`, chromium/webkit/mobile/tablet), rustfmt + clippy + `cargo test`.
+Tauri 2 desktop and mobile todo app: SvelteKit (Svelte 5, TypeScript, adapter-static, `ssr = false`) frontend in `src/`, Rust core in `src-tauri/`. Tooling: ESLint + Prettier + svelte-check, Vitest (`src/**/*.test.ts`), Playwright (`e2e/`, chromium/webkit/mobile/tablet), WebdriverIO + tauri-driver (`e2e-native/`, own package.json), rustfmt + clippy + `cargo test`.
 
 Run everything through make (each target runs in the container):
 
-- `make install` / `make lint` / `make test` / `make e2e`
+- `make install` / `make lint` / `make test` / `make e2e` (Playwright, fake IPC) / `make e2e-native` (tauri-driver against the real app and SQLite)
 - `make dev` (desktop app with hot reload; Vite also on http://localhost:1420), `make build` (Linux bundles), `make android-build` (APK/AAB)
 
 ## Dev environment
