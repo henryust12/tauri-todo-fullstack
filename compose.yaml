@@ -23,18 +23,20 @@ services:
     environment:
       # Needs `xhost +SI:localuser:$USER` on the host (`make x11`).
       DISPLAY: ${DISPLAY:-:0}
+      PLAYWRIGHT_BROWSERS_PATH: /home/dev/.cache/ms-playwright
     volumes:
       # :z relabels the bind mount so SELinux (Fedora) lets the container write.
       - .:/workspace:z
       - cargo-registry:/usr/local/cargo/registry
       - cargo-git:/usr/local/cargo/git
       - npm-cache:/home/dev/.npm
+      - playwright-cache:/home/dev/.cache/ms-playwright
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
     devices:
       - /dev/dri:/dev/dri
     ports:
-      - "1420:1420" # Vite dev server
-      - "1421:1421" # Vite HMR
+      - '1420:1420' # Vite dev server
+      - '1421:1421' # Vite HMR
 
   android:
     <<: *common
@@ -50,7 +52,7 @@ services:
       # ADB_SERVER_SOCKET: tcp:host.docker.internal:5037
       {}
     extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - 'host.docker.internal:host-gateway'
     volumes:
       - .:/workspace:z
       - cargo-registry:/usr/local/cargo/registry
@@ -65,5 +67,6 @@ volumes:
   cargo-registry:
   cargo-git:
   npm-cache:
+  playwright-cache:
   gradle-cache:
   android-user:

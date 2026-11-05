@@ -36,6 +36,23 @@ RUN apt-get update \
         xz-utils \
     && rm -rf /var/lib/apt/lists/*
 
+# Runtime libraries Playwright's chromium/webkit builds need on Debian trixie
+# (`npx playwright install-deps` only knows apt names for Ubuntu).
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        fonts-liberation \
+        fonts-noto-color-emoji \
+        gstreamer1.0-libav \
+        gstreamer1.0-plugins-bad \
+        libgraphene-1.0-0 \
+        libgtk-4-1 \
+        libnotify4 \
+        libnspr4 \
+        libnss3 \
+        libwoff1 \
+        libx264-164 \
+    && rm -rf /var/lib/apt/lists/*
+
 # Node from the official tarball, verified against the published SHA256 list.
 RUN case "${TARGETARCH:-amd64}" in \
         amd64) node_arch=x64 ;; \
@@ -59,7 +76,7 @@ RUN rustup component add rustfmt clippy
 RUN (getent group "${USER_GID}" || groupadd --gid "${USER_GID}" dev) >/dev/null \
     && (getent passwd "${USER_UID}" && userdel -r "$(getent passwd "${USER_UID}" | cut -d: -f1)" || true) >/dev/null \
     && useradd --uid "${USER_UID}" --gid "${USER_GID}" --create-home --shell /bin/bash dev \
-    && mkdir -p /usr/local/cargo/registry /usr/local/cargo/git /home/dev/.npm /home/dev/.gradle /home/dev/.android /workspace \
+    && mkdir -p /usr/local/cargo/registry /usr/local/cargo/git /home/dev/.npm /home/dev/.cache/ms-playwright /home/dev/.gradle /home/dev/.android /workspace \
     && chown -R "${USER_UID}:${USER_GID}" /usr/local/cargo /usr/local/rustup /home/dev /workspace
 
 # WebKitGTK's DMABUF renderer shows a blank window inside containers.
