@@ -13,7 +13,8 @@ export default ts.config(
       'src-tauri/gen/',
       'node_modules/',
       'playwright-report/',
-      'test-results/'
+      'test-results/',
+      'e2e-native/'
     ]
   },
   js.configs.recommended,

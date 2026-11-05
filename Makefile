@@ -4,7 +4,7 @@ DEV     := $(DC) run --rm dev
 ANDROID := $(DC) run --rm android
 
 .DEFAULT_GOAL := help
-.PHONY: help image image-android shell android-shell install dev android-dev build android-build lint test e2e x11 doctor
+.PHONY: help image image-android shell android-shell install dev android-dev build android-build lint test e2e e2e-native x11 doctor
 
 help: ## Show targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-14s %s\n", $$1, $$2}'
@@ -44,6 +44,9 @@ test: ## Run JS and Rust tests
 
 e2e: ## Run Playwright E2E tests
 	$(DEV) npm run test:e2e
+
+e2e-native: ## Run native E2E (real app via tauri-driver) under Xvfb
+	$(DEV) bash -c 'npm run tauri build -- --debug --no-bundle && cd e2e-native && npm ci && xvfb-run -a npm test'
 
 x11: ## Allow the local user to use the host X server (once per session)
 	xhost +SI:localuser:$$(id -un)
