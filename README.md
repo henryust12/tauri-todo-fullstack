@@ -43,7 +43,8 @@ the end-to-end suites, `docker/` and `compose.yaml` the dev environment.
 
 GitHub Actions runs on every push and pull request:
 
-- `ci.yml`: lint, debug builds on Linux, Windows and macOS, Android debug APK, Docker images.
+- `ci.yml`: lint, debug builds on Linux, Windows and macOS, Android debug APK, iOS simulator
+  build, Docker images.
 - `test.yml`: Rust tests on three OSes and Vitest.
 - `e2e.yml`: Playwright on three OSes and the native WebDriver suite on Linux.
 - `security.yml`: cargo-audit, cargo-deny, npm audit, dependency review, hadolint (also weekly).
