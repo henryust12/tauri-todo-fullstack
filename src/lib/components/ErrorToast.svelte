@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { AppError } from '$lib/types';
+  import type { AppError } from '#lib/types.ts';
 
   let { error, ondismiss }: { error: AppError | null; ondismiss: () => void } = $props();
 </script>

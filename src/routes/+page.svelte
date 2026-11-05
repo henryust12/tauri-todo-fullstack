@@ -1,12 +1,12 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { tauriApi } from '$lib/api';
-  import { TodoStore } from '$lib/todos.svelte';
-  import ErrorToast from '$lib/components/ErrorToast.svelte';
-  import FilterBar from '$lib/components/FilterBar.svelte';
-  import Footer from '$lib/components/Footer.svelte';
-  import TodoInput from '$lib/components/TodoInput.svelte';
-  import TodoList from '$lib/components/TodoList.svelte';
+  import { tauriApi } from '#lib/api.ts';
+  import { TodoStore } from '#lib/todos.svelte.ts';
+  import ErrorToast from '#lib/components/ErrorToast.svelte';
+  import FilterBar from '#lib/components/FilterBar.svelte';
+  import Footer from '#lib/components/Footer.svelte';
+  import TodoInput from '#lib/components/TodoInput.svelte';
+  import TodoList from '#lib/components/TodoList.svelte';
 
   const store = new TodoStore(tauriApi);
 

@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { MAX_TITLE_LENGTH } from '$lib/types';
-  import type { TodoRow } from '$lib/todos.svelte';
+  import { MAX_TITLE_LENGTH } from '#lib/types.ts';
+  import type { TodoRow } from '#lib/todos.svelte.ts';
 
   let {
     todo,

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Filter } from '$lib/types';
+  import type { Filter } from '#lib/types.ts';
 
   let {
     filter,

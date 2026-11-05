@@ -1,6 +1,6 @@
 <script lang="ts">
-  import type { Filter } from '$lib/types';
-  import type { TodoRow } from '$lib/todos.svelte';
+  import type { Filter } from '#lib/types.ts';
+  import type { TodoRow } from '#lib/todos.svelte.ts';
   import TodoItem from './TodoItem.svelte';
 
   let {

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { MAX_TITLE_LENGTH } from '$lib/types';
+  import { MAX_TITLE_LENGTH } from '#lib/types.ts';
 
   let { onsubmit }: { onsubmit: (title: string) => void } = $props();
 
