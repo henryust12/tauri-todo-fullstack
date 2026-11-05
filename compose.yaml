@@ -1,0 +1,69 @@
+# Dev environment. Usage: `docker compose run --rm dev <cmd>` (see Makefile).
+
+x-common: &common
+  working_dir: /workspace
+  init: true
+  tty: true
+  stdin_open: true
+  command: bash
+
+x-build-args: &build-args
+  USER_UID: ${USER_UID:-1000}
+  USER_GID: ${USER_GID:-1000}
+
+services:
+  dev:
+    <<: *common
+    image: tauri-todo-dev:latest
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: base
+      args: *build-args
+    environment:
+      # Needs `xhost +SI:localuser:$USER` on the host (`make x11`).
+      DISPLAY: ${DISPLAY:-:0}
+    volumes:
+      # :z relabels the bind mount so SELinux (Fedora) lets the container write.
+      - .:/workspace:z
+      - cargo-registry:/usr/local/cargo/registry
+      - cargo-git:/usr/local/cargo/git
+      - npm-cache:/home/dev/.npm
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+    devices:
+      - /dev/dri:/dev/dri
+    ports:
+      - "1420:1420" # Vite dev server
+      - "1421:1421" # Vite HMR
+
+  android:
+    <<: *common
+    image: tauri-todo-android:latest
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: android
+      args: *build-args
+    environment:
+      # Fallback to use the host's adb server instead of USB passthrough:
+      # run `adb -a nodaemon server start` on the host, then uncomment.
+      # ADB_SERVER_SOCKET: tcp:host.docker.internal:5037
+      {}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - .:/workspace:z
+      - cargo-registry:/usr/local/cargo/registry
+      - cargo-git:/usr/local/cargo/git
+      - npm-cache:/home/dev/.npm
+      - gradle-cache:/home/dev/.gradle
+      - android-user:/home/dev/.android
+      # Direct USB device access instead (needs a matching udev setup):
+      # - /dev/bus/usb:/dev/bus/usb
+
+volumes:
+  cargo-registry:
+  cargo-git:
+  npm-cache:
+  gradle-cache:
+  android-user:
