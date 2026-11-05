@@ -19,6 +19,9 @@ env:
   LINUX_DEPS: >-
     libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev
     libssl-dev libayatana-appindicator3-dev librsvg2-dev
+  FEDORA_DEPS: >-
+    git gcc gcc-c++ make xz tar webkit2gtk4.1-devel openssl-devel curl wget file
+    libappindicator-gtk3-devel librsvg2-devel libxdo-devel
 
 jobs:
   lint:
@@ -112,6 +115,39 @@ jobs:
           sudo apt-get install -y $LINUX_DEPS
       - run: npm ci
       - run: npm run tauri android build -- --debug --apk --target aarch64
+
+  # Builds the rpm against Fedora's own libraries and proves it installs with
+  # dnf; the generic rpm in releases is built on Ubuntu and never tested there.
+  fedora:
+    needs: lint
+    runs-on: ubuntu-24.04
+    container: fedora:43
+    timeout-minutes: 60
+    steps:
+      # git first, so actions/checkout makes a real clone inside the container
+      - name: Install Fedora dependencies
+        run: |
+          # shellcheck disable=SC2086
+          dnf install -y --setopt=install_weak_deps=False $FEDORA_DEPS
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: fedora
+      - run: npm ci
+      - run: npm run tauri build -- --debug --bundles rpm
+      - name: Install the rpm and check linked libraries
+        run: |
+          dnf install -y src-tauri/target/debug/bundle/rpm/*.rpm
+          if ldd /usr/bin/tauri-todo | grep 'not found'; then
+            echo "::error::tauri-todo links against libraries the rpm does not pull in"
+            exit 1
+          fi
 
   # Compiles the iOS/iPadOS app for the simulator, which needs no Apple signing
   # identity; signed device builds live in release.yml behind ENABLE_IOS.
