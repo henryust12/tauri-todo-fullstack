@@ -7,6 +7,13 @@ updates:
     groups:
       npm-minor-patch:
         update-types: [minor, patch]
+  - package-ecosystem: npm
+    directory: /e2e-native
+    schedule:
+      interval: weekly
+    groups:
+      e2e-native-minor-patch:
+        update-types: [minor, patch]
   - package-ecosystem: cargo
     directory: /src-tauri
     schedule:
