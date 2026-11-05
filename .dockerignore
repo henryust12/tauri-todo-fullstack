@@ -1,0 +1,10 @@
+node_modules
+target
+src-tauri/target
+src-tauri/gen
+.svelte-kit
+build
+dist
+.git
+.env
+*.log
