@@ -4,7 +4,12 @@ Guidance for coding agents working in this repository.
 
 ## Status
 
-The repository is not scaffolded yet: it contains only `README.md`. The name (`tauri-todo-fullstack`) indicates a Tauri-based full-stack todo app, but no stack, build tooling, or tests exist yet. Once the project is scaffolded, replace this section with real build/lint/test commands and an architecture overview.
+Tauri 2 desktop and mobile todo app: SvelteKit (Svelte 5, TypeScript, adapter-static, `ssr = false`) frontend in `src/`, Rust core in `src-tauri/`. Tooling: ESLint + Prettier + svelte-check, Vitest (`src/**/*.test.ts`), Playwright (`e2e/`, chromium/webkit/mobile/tablet), rustfmt + clippy + `cargo test`.
+
+Run everything through make (each target runs in the container):
+
+- `make install` / `make lint` / `make test` / `make e2e`
+- `make dev` (desktop app with hot reload; Vite also on http://localhost:1420), `make build` (Linux bundles), `make android-build` (APK/AAB)
 
 ## Dev environment
 
