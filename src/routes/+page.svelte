@@ -1,155 +1,170 @@
 <script lang="ts">
-  import { invoke } from '@tauri-apps/api/core';
+  import { onMount } from 'svelte';
+  import { tauriApi } from '$lib/api';
+  import { TodoStore } from '$lib/todos.svelte';
+  import ErrorToast from '$lib/components/ErrorToast.svelte';
+  import FilterBar from '$lib/components/FilterBar.svelte';
+  import Footer from '$lib/components/Footer.svelte';
+  import TodoInput from '$lib/components/TodoInput.svelte';
+  import TodoList from '$lib/components/TodoList.svelte';
 
-  let name = $state('');
-  let greetMsg = $state('');
+  const store = new TodoStore(tauriApi);
 
-  async function greet(event: Event) {
-    event.preventDefault();
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    greetMsg = await invoke('greet', { name });
-  }
+  onMount(() => {
+    void store.load();
+  });
 </script>
 
-<main class="container">
-  <h1>Welcome to Tauri + Svelte</h1>
+<svelte:head>
+  <title>Tauri Todo</title>
+</svelte:head>
 
-  <div class="row">
-    <a href="https://vite.dev" target="_blank">
-      <img src="/vite.svg" class="logo vite" alt="Vite Logo" />
-    </a>
-    <a href="https://tauri.app" target="_blank">
-      <img src="/tauri.svg" class="logo tauri" alt="Tauri Logo" />
-    </a>
-    <a href="https://svelte.dev" target="_blank">
-      <img src="/svelte.svg" class="logo svelte-kit" alt="SvelteKit Logo" />
-    </a>
-  </div>
-  <p>Click on the Tauri, Vite, and SvelteKit logos to learn more.</p>
+<div class="app">
+  <aside class="sidebar" data-testid="sidebar" aria-label="Filters and totals">
+    <FilterBar
+      orientation="vertical"
+      filter={store.filter}
+      counts={store.counts}
+      onchange={(f) => store.setFilter(f)}
+    />
+    <Footer
+      activeCount={store.counts.active}
+      completedCount={store.counts.completed}
+      onclear={() => store.clearCompleted()}
+    />
+  </aside>
 
-  <form class="row" onsubmit={greet}>
-    <input id="greet-input" placeholder="Enter a name..." bind:value={name} />
-    <button type="submit">Greet</button>
-  </form>
-  <p>{greetMsg}</p>
-</main>
+  <main class="main">
+    <header class="head">
+      <h1>Tauri Todo</h1>
+    </header>
+
+    <div class="inline-filters">
+      <FilterBar filter={store.filter} counts={store.counts} onchange={(f) => store.setFilter(f)} />
+    </div>
+
+    <div class="scroll">
+      <TodoList
+        todos={store.filtered}
+        filter={store.filter}
+        loading={store.loading}
+        ontoggle={(id) => store.toggle(id)}
+        onrename={(id, title) => store.rename(id, title)}
+        ondelete={(id) => store.remove(id)}
+      />
+    </div>
+
+    <div class="inline-footer">
+      <Footer
+        activeCount={store.counts.active}
+        completedCount={store.counts.completed}
+        onclear={() => store.clearCompleted()}
+      />
+    </div>
+
+    <div class="dock">
+      <TodoInput onsubmit={(title) => store.add(title)} />
+    </div>
+  </main>
+</div>
+
+<ErrorToast error={store.error} ondismiss={() => store.dismissError()} />
 
 <style>
-  .logo.vite:hover {
-    filter: drop-shadow(0 0 2em #747bff);
+  .app {
+    min-height: 100dvh;
   }
 
-  .logo.svelte-kit:hover {
-    filter: drop-shadow(0 0 2em #ff3e00);
+  .sidebar {
+    display: none;
   }
 
-  :root {
-    font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
-    font-size: 16px;
-    line-height: 24px;
-    font-weight: 400;
-
-    color: #0f0f0f;
-    background-color: #f6f6f6;
-
-    font-synthesis: none;
-    text-rendering: optimizeLegibility;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-    -webkit-text-size-adjust: 100%;
-  }
-
-  .container {
-    margin: 0;
-    padding-top: 10vh;
+  .main {
     display: flex;
     flex-direction: column;
-    justify-content: center;
-    text-align: center;
+    min-height: 100dvh;
+    background: var(--surface);
   }
 
-  .logo {
-    height: 6em;
-    padding: 1.5em;
-    will-change: filter;
-    transition: 0.75s;
-  }
-
-  .logo.tauri:hover {
-    filter: drop-shadow(0 0 2em #24c8db);
-  }
-
-  .row {
-    display: flex;
-    justify-content: center;
-  }
-
-  a {
-    font-weight: 500;
-    color: #646cff;
-    text-decoration: inherit;
-  }
-
-  a:hover {
-    color: #535bf2;
+  .head {
+    padding: max(1.25rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) 0.75rem
+      max(1rem, env(safe-area-inset-left));
   }
 
   h1 {
-    text-align: center;
+    margin: 0;
+    font-size: 2rem;
+    font-weight: 750;
+    letter-spacing: -0.03em;
+    line-height: 1.1;
   }
 
-  input,
-  button {
-    border-radius: 8px;
-    border: 1px solid transparent;
-    padding: 0.6em 1.2em;
-    font-size: 1em;
-    font-weight: 500;
-    font-family: inherit;
-    color: #0f0f0f;
-    background-color: #ffffff;
-    transition: border-color 0.25s;
-    box-shadow: 0 2px 2px rgba(0, 0, 0, 0.2);
+  .inline-filters {
+    padding: 0 max(1rem, env(safe-area-inset-right)) 0.75rem max(1rem, env(safe-area-inset-left));
   }
 
-  button {
-    cursor: pointer;
+  .scroll {
+    flex: 1;
+    padding-inline: max(0.75rem, env(safe-area-inset-left)) max(0.75rem, env(safe-area-inset-right));
   }
 
-  button:hover {
-    border-color: #396cd8;
-  }
-  button:active {
-    border-color: #396cd8;
-    background-color: #e8e8e8;
+  .inline-footer {
+    padding: 0.25rem max(1rem, env(safe-area-inset-right)) 0.25rem
+      max(1rem, env(safe-area-inset-left));
   }
 
-  input,
-  button {
-    outline: none;
+  /* Input stays reachable by thumb: sticky to the bottom, clear of the home indicator. */
+  .dock {
+    position: sticky;
+    bottom: 0;
+    padding: 0.75rem max(1rem, env(safe-area-inset-right))
+      calc(0.75rem + env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
+    border-top: 1px solid var(--line);
+    background: var(--surface);
   }
 
-  #greet-input {
-    margin-right: 5px;
-  }
-
-  @media (prefers-color-scheme: dark) {
-    :root {
-      color: #f6f6f6;
-      background-color: #2f2f2f;
+  /* Tablet portrait: a centered card. */
+  @media (min-width: 640px) {
+    .app {
+      display: grid;
+      place-items: start center;
+      padding: 2.5rem 1.5rem;
     }
 
-    a:hover {
-      color: #24c8db;
+    .main {
+      width: min(100%, 40rem);
+      min-height: min(48rem, calc(100dvh - 5rem));
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      box-shadow: var(--shadow);
+      overflow: clip;
     }
 
-    input,
-    button {
-      color: #ffffff;
-      background-color: #0f0f0f98;
+    .dock {
+      padding-bottom: 0.75rem;
     }
-    button:active {
-      background-color: #0f0f0f69;
+  }
+
+  /* Desktop: filters and totals move into a sidebar, the list takes the main pane. */
+  @media (min-width: 1024px) {
+    .app {
+      grid-template-columns: 17rem minmax(0, 40rem);
+      justify-content: center;
+      gap: 2rem;
+    }
+
+    .sidebar {
+      position: sticky;
+      top: 2.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+      padding-top: 5.75rem;
+    }
+
+    .inline-filters,
+    .inline-footer {
+      display: none;
     }
   }
 </style>
