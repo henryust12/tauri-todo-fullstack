@@ -11,6 +11,17 @@ Run everything through make (each target runs in the container):
 - `make install` / `make lint` / `make test` / `make e2e` (Playwright, fake IPC) / `make e2e-native` (tauri-driver against the real app and SQLite)
 - `make dev` (desktop app with hot reload; Vite also on http://localhost:1420), `make build` (Linux bundles), `make android-build` (APK/AAB)
 
+## Architecture and gotchas
+
+- `src/lib/api.ts` is the only module that calls `invoke`; Rust commands live in `src-tauri/src/commands.rs`, storage in `repository.rs` (SQLite, `PRAGMA user_version` migrations).
+- SvelteKit 3: there is no `svelte.config.js`; adapter and preprocess are configured in `vite.config.ts`. Imports use the `#lib/*` alias from `package.json` `imports`.
+- `src-tauri/gen/android/` is committed and `app/build.gradle.kts` carries hand-written release signing; re-running `tauri android init` overwrites it. `gen/apple` is not committed (CI runs `tauri ios init`).
+
+## Releases
+
+- Bump `version` in `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` and `package.json` together, then push a signed tag `vX.Y.Z`; `release.yml` rejects a tag that does not match.
+- Android builds are signed with the upload key stored in the `ANDROID_*` repository secrets. Never generate a new key: existing installs could no longer update.
+
 ## Dev environment
 
 All development runs in Docker (`docker/Dockerfile`, `compose.yaml`); `make help` lists the wrappers.
