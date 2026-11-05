@@ -58,8 +58,9 @@ git tag -s v0.1.0 -m "v0.1.0" && git push origin v0.1.0
 
 ### Signing
 
-Without secrets the artifacts are unsigned and still build. Add these repository secrets to
-sign them:
+Android APK and AAB are signed with the upload key in the `ANDROID_*` secrets (since v0.1.3).
+The macOS, Windows and iOS artifacts stay unsigned until their secrets are added; they still
+build without them.
 
 | Platform           | Secrets                                                                                                                    |
 | ------------------ | -------------------------------------------------------------------------------------------------------------------------- |
@@ -73,5 +74,6 @@ sign them:
 - macOS: the first launch is blocked by Gatekeeper. Right-click the app, choose Open, then
   Open again; or run `xattr -dr com.apple.quarantine "/Applications/Tauri Todo.app"`.
 - Windows: SmartScreen shows "Windows protected your PC". Choose More info, then Run anyway.
-- Android: allow installs from unknown sources for the app you open the APK with.
+- Android: the APK is signed, but sideloading still needs "install unknown apps" allowed for
+  the app you open it with.
 - iOS and iPadOS need a signed build; there is no unsigned install path.
